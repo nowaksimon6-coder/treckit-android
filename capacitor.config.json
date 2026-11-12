@@ -1,0 +1,10 @@
+{
+  "appId": "app.treckit.mobile",
+  "appName": "Treck.it",
+  "webDir": "www",
+  "server": {
+    "url": "https://treckit-simon-app.netlify.app",
+    "cleartext": false,
+    "allowNavigation": ["treckit-simon-app.netlify.app"]
+  }
+}
