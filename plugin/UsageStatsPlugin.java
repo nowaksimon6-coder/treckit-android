@@ -63,6 +63,11 @@ public class UsageStatsPlugin extends Plugin {
         return s;
     }
 
+    private static long overlap(long s, long e, long a, long b) {
+        long x = Math.max(s, a), y = Math.min(e, b);
+        return y > x ? y - x : 0;
+    }
+
     @PluginMethod
     public void getDaily(PluginCall call) {
         if (!granted()) { call.reject("no_access"); return; }
@@ -84,9 +89,11 @@ public class UsageStatsPlugin extends Plugin {
                 cal.add(Calendar.DAY_OF_YEAR, 1);
                 long end = Math.min(cal.getTimeInMillis(), now);
                 if (end <= start) continue;
-                UsageEvents ev = usm.queryEvents(start, end);
+                // 6 Stunden Vorlauf, damit Apps, die über Mitternacht offen waren, richtig gezählt werden
+                UsageEvents ev = usm.queryEvents(start - 6L * 3600000L, end);
                 UsageEvents.Event e = new UsageEvents.Event();
-                Map<String, Long> open = new HashMap<>();
+                Map<String, Integer> depth = new HashMap<>();
+                Map<String, Long> since = new HashMap<>();
                 long total = 0;
                 int unlocks = 0;
                 while (ev.hasNextEvent()) {
@@ -94,16 +101,26 @@ public class UsageStatsPlugin extends Plugin {
                     int t = e.getEventType();
                     String pkg = e.getPackageName();
                     long ts = e.getTimeStamp();
-                    if (t == 18) { unlocks++; continue; } // KEYGUARD_HIDDEN = Bildschirm entsperrt
+                    if (t == 18) { if (ts >= start) unlocks++; continue; } // KEYGUARD_HIDDEN = Bildschirm entsperrt
                     if (pkg == null || skip.contains(pkg)) continue;
-                    if (t == 1) { // ACTIVITY_RESUMED
-                        open.put(pkg, ts);
-                    } else if (t == 2 || t == 23) { // ACTIVITY_PAUSED / ACTIVITY_STOPPED
-                        Long s = open.remove(pkg);
-                        if (s != null && ts > s) total += ts - s;
+                    if (t == 1) { // ACTIVITY_RESUMED: eine Seite der App kommt nach vorn
+                        Integer dd = depth.get(pkg);
+                        int n = dd == null ? 0 : dd;
+                        if (n == 0) since.put(pkg, ts);
+                        depth.put(pkg, n + 1);
+                    } else if (t == 2) { // ACTIVITY_PAUSED: eine Seite der App geht weg
+                        Integer dd = depth.get(pkg);
+                        int n = dd == null ? 0 : dd;
+                        if (n <= 0) continue;
+                        n--;
+                        depth.put(pkg, n);
+                        if (n == 0) {
+                            Long s0 = since.remove(pkg);
+                            if (s0 != null) total += overlap(s0, ts, start, end);
+                        }
                     }
                 }
-                for (Long s : open.values()) { if (end > s) total += end - s; }
+                for (Long s0 : since.values()) total += overlap(s0, end, start, end);
                 JSObject o = new JSObject();
                 o.put("date", date);
                 o.put("minutes", Math.round(total / 60000.0));
