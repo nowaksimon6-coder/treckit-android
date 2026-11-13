@@ -119,12 +119,4 @@ if (g.indexOf('treckit.keystore') < 0) {
   g = g.replace(/(buildTypes \{\s*)/, '$1debug {\n            signingConfig signingConfigs.treckit\n        }\n        ');
 }
 fs.writeFileSync(gPath, g);
-// 6. eigenes App-Symbol (Track.it, dunkelblau)
-(function copyDir(src, dst) {
-  fs.readdirSync(src).forEach(function (n) {
-    var a = path.join(src, n), b = path.join(dst, n);
-    if (fs.statSync(a).isDirectory()) { if (!fs.existsSync(b)) fs.mkdirSync(b, { recursive: true }); copyDir(a, b); }
-    else fs.copyFileSync(a, b);
-  });
-})(path.join(repo, 'icon'), path.join(root, 'src', 'main', 'res'));
 console.log('Android-Projekt angepasst.');
