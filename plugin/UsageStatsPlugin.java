@@ -49,7 +49,7 @@ public class UsageStatsPlugin extends Plugin {
     public void hasAccess(PluginCall call) {
         JSObject r = new JSObject();
         r.put("granted", granted());
-        r.put("version", 2);
+        r.put("version", 3);
         call.resolve(r);
     }
 
@@ -63,7 +63,6 @@ public class UsageStatsPlugin extends Plugin {
 
     private Set<String> ignored() {
         Set<String> s = new HashSet<>();
-        s.add(getContext().getPackageName());
         s.add("com.android.systemui");
         try {
             Intent home = new Intent(Intent.ACTION_MAIN);
@@ -97,34 +96,40 @@ public class UsageStatsPlugin extends Plugin {
         // 6 Stunden Vorlauf, damit Apps, die über Mitternacht offen waren, richtig gezählt werden
         UsageEvents ev = usm.queryEvents(start - 6L * 3600000L, end);
         UsageEvents.Event e = new UsageEvents.Event();
-        Map<String, Integer> depth = new HashMap<>();
-        Map<String, Long> since = new HashMap<>();
+        // Immer nur eine App ist im Vordergrund: eine neue App beendet die alte, Bildschirm aus beendet alles.
+        // Startbildschirm und Systemleiste beenden die Zeit der vorigen App, zählen selbst aber nicht.
+        String cur = null, curCls = null;
+        long curStart = 0;
         while (ev.hasNextEvent()) {
             ev.getNextEvent(e);
             int t = e.getEventType();
             String pkg = e.getPackageName();
+            String cls = e.getClassName();
             long ts = e.getTimeStamp();
             if (t == 18) { if (ts >= start) day.unlocks++; continue; } // KEYGUARD_HIDDEN = Bildschirm entsperrt
-            if (pkg == null || skip.contains(pkg)) continue;
-            if (t == 1) { // ACTIVITY_RESUMED: eine Seite der App kommt nach vorn
-                Integer dd = depth.get(pkg);
-                int n = dd == null ? 0 : dd;
-                if (n == 0) since.put(pkg, ts);
-                depth.put(pkg, n + 1);
-            } else if (t == 2) { // ACTIVITY_PAUSED: eine Seite der App geht weg
-                Integer dd = depth.get(pkg);
-                int n = dd == null ? 0 : dd;
-                if (n <= 0) continue;
-                n--;
-                depth.put(pkg, n);
-                if (n == 0) {
-                    Long s0 = since.remove(pkg);
-                    if (s0 != null) add(day, pkg, overlap(s0, ts, start, end));
+            if (t == 16 || t == 26) { // Bildschirm aus oder Handy ausgeschaltet
+                if (cur != null) addCounted(day, skip, cur, overlap(curStart, ts, start, end));
+                cur = null; curCls = null;
+                continue;
+            }
+            if (pkg == null) continue;
+            if (t == 1) { // ACTIVITY_RESUMED
+                if (pkg.equals(cur)) { curCls = cls; continue; }
+                if (cur != null) addCounted(day, skip, cur, overlap(curStart, ts, start, end));
+                cur = pkg; curCls = cls; curStart = ts;
+            } else if (t == 2 || t == 23) { // ACTIVITY_PAUSED / ACTIVITY_STOPPED
+                if (cur != null && pkg.equals(cur) && (curCls == null || cls == null || cls.equals(curCls))) {
+                    addCounted(day, skip, cur, overlap(curStart, ts, start, end));
+                    cur = null; curCls = null;
                 }
             }
         }
-        for (Map.Entry<String, Long> en : since.entrySet()) add(day, en.getKey(), overlap(en.getValue(), end, start, end));
+        if (cur != null) addCounted(day, skip, cur, overlap(curStart, end, start, end));
         return day;
+    }
+
+    private static void addCounted(Day day, Set<String> skip, String pkg, long ms) {
+        if (!skip.contains(pkg)) add(day, pkg, ms);
     }
 
     private static void add(Day day, String pkg, long ms) {
