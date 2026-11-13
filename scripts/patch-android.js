@@ -24,7 +24,7 @@ let mf = fs.readFileSync(mfPath, 'utf8');
 if (mf.indexOf('PACKAGE_USAGE_STATS') < 0) {
   if (mf.indexOf('xmlns:tools') < 0) mf = mf.replace('<manifest ', '<manifest xmlns:tools="http://schemas.android.com/tools" ');
   must(mf.indexOf('<application') > 0, 'Manifest ohne application');
-  mf = mf.replace('<application', '<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />\n    <application');
+  mf = mf.replace('<application', '<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />\n    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />\n    <application');
   fs.writeFileSync(mfPath, mf);
 }
 // feste Signatur, damit Updates über die vorhandene App installiert werden können
