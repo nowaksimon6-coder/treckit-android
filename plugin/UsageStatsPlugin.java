@@ -155,7 +155,9 @@ public class UsageStatsPlugin extends Plugin {
 
     private static JSArray hourMinutes(long[] hs) {
         JSArray a = new JSArray();
-        for (long v : hs) a.put(Math.round(v / 6000.0) / 10.0);
+        for (long v : hs) {
+            try { a.put(Math.round(v / 6000.0) / 10.0); } catch (org.json.JSONException ex) { a.put(0); }
+        }
         return a;
     }
 
