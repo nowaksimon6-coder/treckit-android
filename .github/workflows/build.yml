@@ -1,7 +1,7 @@
 name: Android-App bauen
 on:
   push:
-    branches: [main]
+    branches: [main, entwicklung]
   workflow_dispatch:
 permissions:
   contents: write
@@ -18,18 +18,51 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: npm install
-      - run: npx cap add android
-      - run: node scripts/patch-android.js
-      - run: npx cap sync android
-      - run: ./gradlew assembleDebug --no-daemon
+      - name: Android-Projekt anlegen und anpassen
+        run: |
+          set -o pipefail
+          npx cap add android 2>&1 | tee build.log
+          node scripts/patch-android.js 2>&1 | tee -a build.log
+          npx cap sync android 2>&1 | tee -a build.log
+      - name: APK bauen (Protokoll wird mitgeschrieben)
         working-directory: android
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee -a ../build.log
       - uses: actions/upload-artifact@v4
         with:
           name: Treckit-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
       - name: APK als Download veröffentlichen
+        if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk Treckit.apk
           gh release create "build-${{ github.run_number }}" Treckit.apk --title "Treck.it Android, Build ${{ github.run_number }}" --notes "Treckit.apk herunterladen und auf dem Handy öffnen." --latest
+      - name: Testversion aus dem Entwicklungszweig bereitstellen
+        if: github.ref_name != 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Treckit-Test.apk
+          gh release delete testversion --yes --cleanup-tag || true
+          gh release create testversion Treckit-Test.apk --target "${{ github.sha }}" --prerelease --latest=false --title "Testversion (Entwicklung, ${{ github.run_number }})" --notes "Nur zum Testen. Ersetzt die installierte App."
+      - name: Fehlerprotokoll lesbar ablegen
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          touch build.log
+          {
+            echo "Lauf ${{ github.run_number }}, Zweig ${{ github.ref_name }}, Commit ${{ github.sha }}"
+            echo
+            echo "== Fehlerstellen =="
+            grep -n -E "^e: |error:|ERROR|FAILURE|What went wrong|Could not|Unresolved|cannot find symbol|Execution failed" build.log | head -120 || true
+            echo
+            echo "== Ende des Protokolls =="
+            tail -n 150 build.log
+          } > fehler.txt
+          head -c 120000 fehler.txt > notes.txt
+          gh release delete bau-fehler --yes --cleanup-tag || true
+          gh release create bau-fehler build.log --target "${{ github.sha }}" --prerelease --latest=false --title "Bau-Fehler (Lauf ${{ github.run_number }})" --notes-file notes.txt
