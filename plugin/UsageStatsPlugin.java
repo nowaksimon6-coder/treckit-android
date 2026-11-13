@@ -35,6 +35,9 @@ public class UsageStatsPlugin extends Plugin {
         long total;
         int unlocks;
         Map<String, Long> apps = new HashMap<>();
+        long dayStart;
+        long[] hours = new long[24];
+        Map<String, long[]> appHours = new HashMap<>();
     }
 
     private boolean granted() {
@@ -49,7 +52,7 @@ public class UsageStatsPlugin extends Plugin {
     public void hasAccess(PluginCall call) {
         JSObject r = new JSObject();
         r.put("granted", granted());
-        r.put("version", 3);
+        r.put("version", 4);
         call.resolve(r);
     }
 
@@ -89,6 +92,7 @@ public class UsageStatsPlugin extends Plugin {
         cal.add(Calendar.DAY_OF_YEAR, -daysBack);
         long start = cal.getTimeInMillis();
         Day day = new Day();
+        day.dayStart = start;
         day.date = String.format("%04d-%02d-%02d", cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH));
         cal.add(Calendar.DAY_OF_YEAR, 1);
         long end = Math.min(cal.getTimeInMillis(), now);
@@ -108,28 +112,51 @@ public class UsageStatsPlugin extends Plugin {
             long ts = e.getTimeStamp();
             if (t == 18) { if (ts >= start) day.unlocks++; continue; } // KEYGUARD_HIDDEN = Bildschirm entsperrt
             if (t == 16 || t == 26) { // Bildschirm aus oder Handy ausgeschaltet
-                if (cur != null) addCounted(day, skip, cur, overlap(curStart, ts, start, end));
+                if (cur != null) addSpan(day, skip, cur, curStart, ts, start, end);
                 cur = null; curCls = null;
                 continue;
             }
             if (pkg == null) continue;
             if (t == 1) { // ACTIVITY_RESUMED
                 if (pkg.equals(cur)) { curCls = cls; continue; }
-                if (cur != null) addCounted(day, skip, cur, overlap(curStart, ts, start, end));
+                if (cur != null) addSpan(day, skip, cur, curStart, ts, start, end);
                 cur = pkg; curCls = cls; curStart = ts;
             } else if (t == 2 || t == 23) { // ACTIVITY_PAUSED / ACTIVITY_STOPPED
                 if (cur != null && pkg.equals(cur) && (curCls == null || cls == null || cls.equals(curCls))) {
-                    addCounted(day, skip, cur, overlap(curStart, ts, start, end));
+                    addSpan(day, skip, cur, curStart, ts, start, end);
                     cur = null; curCls = null;
                 }
             }
         }
-        if (cur != null) addCounted(day, skip, cur, overlap(curStart, end, start, end));
+        if (cur != null) addSpan(day, skip, cur, curStart, end, start, end);
         return day;
     }
 
-    private static void addCounted(Day day, Set<String> skip, String pkg, long ms) {
-        if (!skip.contains(pkg)) add(day, pkg, ms);
+    /** Zählt die Zeit von s bis e (auf den Tag begrenzt) und verteilt sie auf die Stunden des Tages. */
+    private static void addSpan(Day day, Set<String> skip, String pkg, long s, long e, long start, long end) {
+        if (skip.contains(pkg)) return;
+        long x = Math.max(s, start), y = Math.min(e, end);
+        if (y <= x) return;
+        add(day, pkg, y - x);
+        long[] ah = day.appHours.get(pkg);
+        if (ah == null) { ah = new long[24]; day.appHours.put(pkg, ah); }
+        while (x < y) {
+            int h = (int) ((x - day.dayStart) / 3600000L);
+            if (h < 0) h = 0;
+            if (h > 23) h = 23;
+            long next = Math.min(y, day.dayStart + (h + 1) * 3600000L);
+            if (h == 23) next = y;
+            long part = next - x;
+            day.hours[h] += part;
+            ah[h] += part;
+            x = next;
+        }
+    }
+
+    private static JSArray hourMinutes(long[] hs) {
+        JSArray a = new JSArray();
+        for (long v : hs) a.put(Math.round(v / 6000.0) / 10.0);
+        return a;
     }
 
     private static void add(Day day, String pkg, long ms) {
@@ -178,6 +205,13 @@ public class UsageStatsPlugin extends Plugin {
                     if (min > 0) apps.put(en.getKey(), min);
                 }
                 o.put("apps", apps);
+                o.put("hours", hourMinutes(day.hours));
+                JSObject ah = new JSObject();
+                for (Map.Entry<String, long[]> en : day.appHours.entrySet()) {
+                    Long tot = day.apps.get(en.getKey());
+                    if (tot != null && tot >= 30000L) ah.put(en.getKey(), hourMinutes(en.getValue()));
+                }
+                o.put("appHours", ah);
                 out.put(o);
             }
             JSObject r = new JSObject();
