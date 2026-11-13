@@ -1,4 +1,4 @@
-# Treck.it Android
+# Track.it Android
 
 Android-Hülle für https://treckit-simon-app.netlify.app mit einem Modul, das die Bildschirmzeit
 (Nutzungsdaten) und Entsperrungen des Geräts liest. Die Web-App selbst wird weiter über Netlify aktualisiert.

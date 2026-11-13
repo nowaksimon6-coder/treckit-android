@@ -31,23 +31,23 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee -a ../build.log
       - uses: actions/upload-artifact@v4
         with:
-          name: Treckit-App
+          name: Trackit-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
       - name: APK als Download veröffentlichen
         if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk Treckit.apk
-          gh release create "build-${{ github.run_number }}" Treckit.apk --title "Treck.it Android, Build ${{ github.run_number }}" --notes "Treckit.apk herunterladen und auf dem Handy öffnen." --latest
+          cp android/app/build/outputs/apk/debug/app-debug.apk Trackit.apk
+          gh release create "build-${{ github.run_number }}" Trackit.apk --title "Track.it Android, Build ${{ github.run_number }}" --notes "Trackit.apk herunterladen und auf dem Handy öffnen." --latest
       - name: Testversion aus dem Entwicklungszweig bereitstellen
         if: github.ref_name != 'main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk Treckit-Test.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk Trackit-Test.apk
           gh release delete testversion --yes --cleanup-tag || true
-          gh release create testversion Treckit-Test.apk --target "${{ github.sha }}" --prerelease --latest=false --title "Testversion (Entwicklung, ${{ github.run_number }})" --notes "Nur zum Testen. Ersetzt die installierte App."
+          gh release create testversion Trackit-Test.apk --target "${{ github.sha }}" --prerelease --latest=false --title "Testversion (Entwicklung, ${{ github.run_number }})" --notes "Nur zum Testen. Ersetzt die installierte App."
       - name: Fehlerprotokoll lesbar ablegen
         if: failure()
         env:

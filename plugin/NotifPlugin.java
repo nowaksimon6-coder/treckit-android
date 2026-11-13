@@ -22,7 +22,7 @@ import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Zugriff auf Benachrichtigungen ausgewählter Apps, damit Treck.it daraus Tageswerte machen kann. */
+/** Zugriff auf Benachrichtigungen ausgewählter Apps, damit Track.it daraus Tageswerte machen kann. */
 @CapacitorPlugin(name = "TreckitNotif")
 public class NotifPlugin extends Plugin {
 
@@ -97,7 +97,7 @@ public class NotifPlugin extends Plugin {
         }
     }
 
-    /** App-Info von Treck.it, dort lassen sich bei manchen Handys „eingeschränkte Einstellungen“ freigeben. */
+    /** App-Info von Track.it, dort lassen sich bei manchen Handys „eingeschränkte Einstellungen“ freigeben. */
     @PluginMethod
     public void openAppInfo(PluginCall call) {
         try {

@@ -53,7 +53,7 @@ import kotlin.reflect.KClass
 @CapacitorPlugin(name = "TreckitHealth")
 class HealthPlugin : Plugin() {
 
-    /** Ein Wert, den Treck.it lesen kann. */
+    /** Ein Wert, den Track.it lesen kann. */
     private class Spec(val type: KClass<out Record>, val metric: AggregateMetric<*>?, val digits: Int, val conv: (Any) -> Double)
 
     private val specs: Map<String, Spec> = linkedMapOf(

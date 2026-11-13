@@ -15,7 +15,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Merkt sich Benachrichtigungen, aber nur von den Apps, die der Nutzer in Treck.it ausgewählt hat.
+ * Merkt sich Benachrichtigungen, aber nur von den Apps, die der Nutzer in Track.it ausgewählt hat.
  * Alles bleibt auf dem Handy (Datei im App-Speicher).
  */
 public class TreckitNotifService extends NotificationListenerService {

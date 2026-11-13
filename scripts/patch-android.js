@@ -43,7 +43,7 @@ if (mf.indexOf('treckit-module') < 0) {
   ].concat(HEALTH.map(function (h) { return '<uses-permission android:name="android.permission.health.READ_' + h + '" />'; }))
     .concat(['<queries>', '    <package android:name="com.google.android.apps.healthdata" />', '</queries>']);
   mf = mf.replace('<application', perms.join('\n    ') + '\n\n    <application');
-  // Android 13 und älter: Health Connect zeigt über diese Aktion, wofür Treck.it die Daten braucht
+  // Android 13 und älter: Health Connect zeigt über diese Aktion, wofür Track.it die Daten braucht
   const actIdx = mf.indexOf('android:name=".MainActivity"');
   must(actIdx > 0, 'MainActivity nicht im Manifest');
   const endFilter = mf.indexOf('</intent-filter>', actIdx);
@@ -63,7 +63,7 @@ if (mf.indexOf('treckit-module') < 0) {
     '</activity-alias>',
     '<service',
     '    android:name=".TreckitNotifService"',
-    '    android:label="Treck.it"',
+    '    android:label="Track.it"',
     '    android:exported="true"',
     '    android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">',
     '    <intent-filter>',
