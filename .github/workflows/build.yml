@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,3 +27,9 @@ jobs:
         with:
           name: Treckit-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: APK als Download veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Treckit.apk
+          gh release create "build-${{ github.run_number }}" Treckit.apk --title "Treck.it Android, Build ${{ github.run_number }}" --notes "Treckit.apk herunterladen und auf dem Handy öffnen." --latest
