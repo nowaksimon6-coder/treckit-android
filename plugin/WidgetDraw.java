@@ -88,7 +88,18 @@ public class WidgetDraw {
     }
 
     /** Flamme aus der App, Größe sz, oben links bei x/y */
-    static void flame(Canvas cv, float x, float y, float sz, boolean on) {
+    // Blaue Flamme: je länger die Serie, desto blauer (wie in der App)
+    static int flameRgb(int n) {
+        double t = Math.pow(Math.min(1.0, Math.max(0, n) / 30.0), 0.7);
+        int[] a = { 227, 238, 251 }, m = { 142, 197, 255 }, z = { 76, 157, 255 };
+        int[] from = t <= 0.4 ? a : m, to = t <= 0.4 ? m : z;
+        double f = t <= 0.4 ? t / 0.4 : (t - 0.4) / 0.6;
+        int r = (int) Math.round(from[0] + (to[0] - from[0]) * f), g = (int) Math.round(from[1] + (to[1] - from[1]) * f), b = (int) Math.round(from[2] + (to[2] - from[2]) * f);
+        return (r << 16) | (g << 8) | b;
+    }
+    static void flame(Canvas cv, float x, float y, float sz, int streak) {
+        boolean on = streak > 0;
+        int rgb = on ? flameRgb(streak) : 0xF5F5F7;
         float k = sz / 72f;
         Path o = new Path();
         o.moveTo(32, 4);
@@ -115,10 +126,12 @@ public class WidgetDraw {
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeJoin(Paint.Join.ROUND);
         p.setStrokeWidth(1.4f);
-        p.setColor(on ? 0xCCF5F5F7 : 0x55F5F5F7);
+        p.setColor(on ? (0xEE000000 | rgb) : 0x55F5F5F7);
+        if (on) p.setShadowLayer(6f, 0, 0, (0x66000000 | rgb));
         cv.drawPath(o, p);
         p.setStrokeWidth(1.1f);
-        p.setColor(on ? 0x99F5F5F7 : 0x33F5F5F7);
+        p.clearShadowLayer();
+        p.setColor(on ? (0xAA000000 | rgb) : 0x33F5F5F7);
         cv.drawPath(in, p);
         cv.restore();
     }
@@ -146,7 +159,7 @@ public class WidgetDraw {
         int streak = d.optInt("streak", 0);
         int[] pr = todayProgress(d);
         float fs = Math.min(w, h) * 0.34f;
-        flame(cv, w / 2f - fs * 0.45f, h * 0.1f, fs, streak > 0);
+        flame(cv, w / 2f - fs * 0.45f, h * 0.1f, fs, streak);
         Paint num = paint(INK, Math.min(w, h) * 0.26f, true);
         num.setTextAlign(Paint.Align.CENTER);
         cv.drawText(String.valueOf(streak), w / 2f, h * 0.1f + fs + num.getTextSize() * 0.95f, num);
@@ -179,7 +192,7 @@ public class WidgetDraw {
         Paint n2 = paint(INK, 18 * s, true);
         n2.setTextAlign(Paint.Align.RIGHT);
         cv.drawText(String.valueOf(streak), w - pad, pad + 16 * s, n2);
-        flame(cv, w - pad - n2.measureText(String.valueOf(streak)) - fs - 2 * s, pad - 2 * s, fs, streak > 0);
+        flame(cv, w - pad - n2.measureText(String.valueOf(streak)) - fs - 2 * s, pad - 2 * s, fs, streak);
         Paint st = paint(0x80F5F5F7, 10 * s, false);
         st.setTextAlign(Paint.Align.RIGHT);
         st.setLetterSpacing(0.1f);
