@@ -19,7 +19,7 @@ import java.io.InputStream;
  */
 @CapacitorPlugin(name = "TreckitShare")
 public class SharePlugin extends Plugin {
-    private static final int MAX = 15 * 1024 * 1024;
+    private static final int MAX = 30 * 1024 * 1024;
     private JSObject pending = null;
 
     @Override
@@ -36,7 +36,19 @@ public class SharePlugin extends Plugin {
     private boolean take(Intent intent) {
         if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return false;
         Uri uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
-        if (uri == null) return false;
+        if (uri == null) {
+            // Links (z. B. aus TikTok, YouTube, Spotify) kommen als Text
+            CharSequence txt = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            if (txt == null || txt.length() == 0) return false;
+            JSObject o = new JSObject();
+            o.put("mime", "text/plain");
+            o.put("text", txt.toString().length() > 2000 ? txt.toString().substring(0, 2000) : txt.toString());
+            CharSequence subj = intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT);
+            if (subj != null) o.put("subject", subj.toString());
+            pending = o;
+            intent.setAction(Intent.ACTION_MAIN);
+            return true;
+        }
         try {
             String mime = intent.getType();
             if (mime == null) mime = getContext().getContentResolver().getType(uri);
@@ -56,7 +68,7 @@ public class SharePlugin extends Plugin {
                 int n, total = 0;
                 while ((n = in.read(buf)) > 0) {
                     total += n;
-                    if (total > MAX) return false;
+                    if (total > MAX) { JSObject big = new JSObject(); big.put("tooBig", true); big.put("mime", mime == null ? "" : mime); pending = big; intent.setAction(Intent.ACTION_MAIN); return true; }
                     out.write(buf, 0, n);
                 }
             }
