@@ -9,7 +9,7 @@ const pkgDir = path.join(root, 'src', 'main', 'java', 'app', 'treckit', 'mobile'
 must(fs.existsSync(pkgDir), 'Paketordner nicht gefunden: ' + pkgDir);
 
 // 1. Module kopieren
-['UsageStatsPlugin.java', 'HealthPlugin.kt', 'NotifPlugin.java', 'TreckitNotifService.java', 'SharePlugin.java'].forEach(function (f) {
+['UsageStatsPlugin.java', 'HealthPlugin.kt', 'NotifPlugin.java', 'TreckitNotifService.java', 'SharePlugin.java', 'WidgetPlugin.java', 'WidgetDraw.java', 'TreckitWidgetFlame.java', 'TreckitWidgetChart.java'].forEach(function (f) {
   fs.copyFileSync(path.join(repo, 'plugin', f), path.join(pkgDir, f));
 });
 fs.writeFileSync(path.join(pkgDir, 'MainActivity.java'),
@@ -25,6 +25,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HealthPlugin.class);
         registerPlugin(NotifPlugin.class);
         registerPlugin(SharePlugin.class);
+        registerPlugin(WidgetPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
@@ -62,6 +63,14 @@ if (mf.indexOf('treckit-module') < 0) {
     '        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />',
     '    </intent-filter>',
     '</activity-alias>',
+    '<receiver android:name=".TreckitWidgetFlame" android:label="Track.it Flamme" android:exported="false">',
+    '    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>',
+    '    <meta-data android:name="android.appwidget.provider" android:resource="@xml/treckit_widget_flame" />',
+    '</receiver>',
+    '<receiver android:name=".TreckitWidgetChart" android:label="Track.it Fortschritt" android:exported="false">',
+    '    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>',
+    '    <meta-data android:name="android.appwidget.provider" android:resource="@xml/treckit_widget_chart" />',
+    '</receiver>',
     '<service',
     '    android:name=".TreckitNotifService"',
     '    android:label="Track.it"',
@@ -76,6 +85,15 @@ if (mf.indexOf('treckit-module') < 0) {
   mf = mf.replace('</application>', '    ' + extra.join('\n        ') + '\n    </application>');
   fs.writeFileSync(mfPath, mf);
 }
+
+// 2b. Widgets: Layout und Beschreibung
+const resDir = path.join(root, 'src', 'main', 'res');
+fs.mkdirSync(path.join(resDir, 'layout'), { recursive: true });
+fs.mkdirSync(path.join(resDir, 'xml'), { recursive: true });
+fs.writeFileSync(path.join(resDir, 'layout', 'treckit_widget.xml'), '<?xml version="1.0" encoding="utf-8"?>\n<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">\n    <ImageView android:id="@+id/widget_img" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitCenter" android:contentDescription="Track.it" />\n</FrameLayout>\n');
+const winfo = function (w, h, cw, ch) { return '<?xml version="1.0" encoding="utf-8"?>\n<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android" android:minWidth="' + w + 'dp" android:minHeight="' + h + 'dp" android:targetCellWidth="' + cw + '" android:targetCellHeight="' + ch + '" android:minResizeWidth="70dp" android:minResizeHeight="70dp" android:resizeMode="horizontal|vertical" android:updatePeriodMillis="1800000" android:initialLayout="@layout/treckit_widget" android:widgetCategory="home_screen" />\n'; };
+fs.writeFileSync(path.join(resDir, 'xml', 'treckit_widget_flame.xml'), winfo(110, 110, 2, 2));
+fs.writeFileSync(path.join(resDir, 'xml', 'treckit_widget_chart.xml'), winfo(250, 110, 4, 2));
 
 // 3. Health Connect braucht mindestens Android 8 (API 26)
 const varPath = path.join(androidDir, 'variables.gradle');
