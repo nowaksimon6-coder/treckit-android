@@ -37,6 +37,9 @@ public class UsageStatsPlugin extends Plugin {
         int notifs;
         int launches;
         long firstMs = -1;
+        long[] unlockH = new long[24];
+        Map<String, long[]> appOpens = new HashMap<>();
+        Map<String, long[]> appNotifs = new HashMap<>();
         long lastMs = -1;
         Map<String, Long> apps = new HashMap<>();
         long dayStart;
@@ -56,7 +59,7 @@ public class UsageStatsPlugin extends Plugin {
     public void hasAccess(PluginCall call) {
         JSObject r = new JSObject();
         r.put("granted", granted());
-        r.put("version", 7);
+        r.put("version", 8);
         call.resolve(r);
     }
 
@@ -117,12 +120,13 @@ public class UsageStatsPlugin extends Plugin {
             if (t == 18) { // KEYGUARD_HIDDEN = Bildschirm entsperrt
                 if (ts >= start && ts < end) {
                     day.unlocks++;
+                    day.unlockH[hourOf(day, ts)]++;
                     // erste Nutzung des Tages: erstes Entsperren nach 4 Uhr
                     if (ts >= start + 4L * 3600000L && day.firstMs < 0) day.firstMs = ts - start;
                 }
                 continue;
             }
-            if (t == 12) { if (ts >= start && ts < end) day.notifs++; continue; } // NOTIFICATION_INTERRUPTION
+            if (t == 12) { if (ts >= start && ts < end) { day.notifs++; if (pkg != null) bump(day.appNotifs, pkg, hourOf(day, ts)); } continue; } // NOTIFICATION_INTERRUPTION
             if (t == 16 || t == 26) { // Bildschirm aus oder Handy ausgeschaltet
                 if (cur != null) addSpan(day, skip, cur, curStart, ts, start, end);
                 cur = null; curCls = null;
@@ -131,7 +135,7 @@ public class UsageStatsPlugin extends Plugin {
             if (pkg == null) continue;
             if (t == 1) { // ACTIVITY_RESUMED
                 if (pkg.equals(cur)) { curCls = cls; continue; }
-                if (ts >= start && ts < end && !skip.contains(pkg)) { day.launches++; day.lastMs = ts - start; }
+                if (ts >= start && ts < end && !skip.contains(pkg)) { day.launches++; day.lastMs = ts - start; bump(day.appOpens, pkg, hourOf(day, ts)); }
                 if (cur != null) addSpan(day, skip, cur, curStart, ts, start, end);
                 cur = pkg; curCls = cls; curStart = ts;
             } else if (t == 2 || t == 23) { // ACTIVITY_PAUSED / ACTIVITY_STOPPED
@@ -165,6 +169,29 @@ public class UsageStatsPlugin extends Plugin {
             ah[h] += part;
             x = next;
         }
+    }
+
+    private static int hourOf(Day day, long ts) {
+        int h = (int) ((ts - day.dayStart) / 3600000L);
+        return h < 0 ? 0 : h > 23 ? 23 : h;
+    }
+
+    private static void bump(Map<String, long[]> m, String pkg, int h) {
+        long[] a = m.get(pkg);
+        if (a == null) { a = new long[24]; m.put(pkg, a); }
+        a[h]++;
+    }
+
+    private static JSArray hourCounts(long[] hs) {
+        JSArray a = new JSArray();
+        for (long v : hs) a.put((int) v);
+        return a;
+    }
+
+    private static JSObject perApp(Map<String, long[]> m) {
+        JSObject o = new JSObject();
+        for (Map.Entry<String, long[]> en : m.entrySet()) o.put(en.getKey(), hourCounts(en.getValue()));
+        return o;
     }
 
     private static JSArray hourMinutes(long[] hs) {
@@ -232,6 +259,9 @@ public class UsageStatsPlugin extends Plugin {
                     if (tot != null && tot >= 30000L) ah.put(en.getKey(), hourMinutes(en.getValue()));
                 }
                 o.put("appHours", ah);
+                o.put("unlockHours", hourCounts(day.unlockH));
+                o.put("appOpens", perApp(day.appOpens));
+                o.put("appNotifs", perApp(day.appNotifs));
                 out.put(o);
             }
             JSObject r = new JSObject();
