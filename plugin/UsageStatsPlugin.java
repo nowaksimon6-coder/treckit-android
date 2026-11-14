@@ -52,7 +52,7 @@ public class UsageStatsPlugin extends Plugin {
     public void hasAccess(PluginCall call) {
         JSObject r = new JSObject();
         r.put("granted", granted());
-        r.put("version", 4);
+        r.put("version", 5);
         call.resolve(r);
     }
 
@@ -222,6 +222,39 @@ public class UsageStatsPlugin extends Plugin {
         } catch (Exception ex) {
             call.reject("read_failed");
         }
+    }
+
+    /** App-Symbole als kleine PNG-Bilder (Base64), damit die App-Liste die echten Icons zeigen kann. */
+    @PluginMethod
+    public void getIcons(PluginCall call) {
+        JSObject icons = new JSObject();
+        try {
+            JSArray pkgs = call.getArray("pkgs");
+            PackageManager pm = getContext().getPackageManager();
+            int n = pkgs == null ? 0 : Math.min(pkgs.length(), 120);
+            for (int i = 0; i < n; i++) {
+                String p = pkgs.optString(i, "");
+                if (p.isEmpty()) continue;
+                try {
+                    android.graphics.drawable.Drawable d = pm.getApplicationIcon(p);
+                    android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888);
+                    android.graphics.Canvas cv = new android.graphics.Canvas(bmp);
+                    d.setBounds(0, 0, 96, 96);
+                    d.draw(cv);
+                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out);
+                    icons.put(p, "data:image/png;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP));
+                    bmp.recycle();
+                } catch (Exception ex) {
+                    // App nicht (mehr) installiert: ohne Symbol weiter
+                }
+            }
+        } catch (Exception ex) {
+            // leere Liste zurückgeben
+        }
+        JSObject r = new JSObject();
+        r.put("icons", icons);
+        call.resolve(r);
     }
 
     /** Liste der Apps, die in den letzten Tagen benutzt wurden, mit Namen, meistgenutzte zuerst. */
