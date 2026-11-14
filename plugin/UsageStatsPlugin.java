@@ -52,7 +52,7 @@ public class UsageStatsPlugin extends Plugin {
     public void hasAccess(PluginCall call) {
         JSObject r = new JSObject();
         r.put("granted", granted());
-        r.put("version", 5);
+        r.put("version", 6);
         call.resolve(r);
     }
 
@@ -221,6 +221,21 @@ public class UsageStatsPlugin extends Plugin {
             call.resolve(r);
         } catch (Exception ex) {
             call.reject("read_failed");
+        }
+    }
+
+    /** Öffnet eine andere App, zum Beispiel um dort einen Screenshot zu machen. */
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        String pkg = call.getString("pkg", "");
+        try {
+            Intent i = pkg == null || pkg.isEmpty() ? null : getContext().getPackageManager().getLaunchIntentForPackage(pkg);
+            if (i == null) { call.reject("not_installed"); return; }
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject("open_failed");
         }
     }
 
