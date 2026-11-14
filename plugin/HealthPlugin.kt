@@ -9,6 +9,12 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.BloodGlucoseRecord
+import androidx.health.connect.client.records.BloodPressureRecord
+import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+import androidx.health.connect.client.records.MenstruationFlowRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.FloorsClimbedRecord
@@ -36,6 +42,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
@@ -54,7 +61,16 @@ import kotlin.reflect.KClass
 class HealthPlugin : Plugin() {
 
     /** Ein Wert, den Track.it lesen kann. */
-    private class Spec(val type: KClass<out Record>, val metric: AggregateMetric<*>?, val digits: Int, val conv: (Any) -> Double)
+    private class Spec(
+        val type: KClass<out Record>,
+        val metric: AggregateMetric<*>?,
+        val digits: Int,
+        /** Für Einzelmessungen ohne fertige Tagessumme: Zeitpunkt und Wert einer Messung. */
+        val pick: ((Record) -> Pair<Instant, Double>)? = null,
+        /** avg = Durchschnitt des Tages, last = letzte Messung des Tages, any = 1, wenn es an dem Tag einen Eintrag gibt */
+        val mode: String = "",
+        val conv: (Any) -> Double
+    )
 
     private val specs: Map<String, Spec> = linkedMapOf(
         "steps" to Spec(StepsRecord::class, StepsRecord.COUNT_TOTAL, 0) { (it as Long).toDouble() },
@@ -70,7 +86,17 @@ class HealthPlugin : Plugin() {
         "hr_min" to Spec(HeartRateRecord::class, HeartRateRecord.BPM_MIN, 0) { (it as Long).toDouble() },
         "resting_hr" to Spec(RestingHeartRateRecord::class, RestingHeartRateRecord.BPM_AVG, 0) { (it as Long).toDouble() },
         "weight" to Spec(WeightRecord::class, WeightRecord.WEIGHT_AVG, 1) { (it as Mass).inKilograms },
-        "sleep" to Spec(SleepSessionRecord::class, null, 2) { it as Double }
+        "sleep" to Spec(SleepSessionRecord::class, null, 2) { it as Double },
+        "sleep_deep" to Spec(SleepSessionRecord::class, null, 2) { it as Double },
+        "sleep_rem" to Spec(SleepSessionRecord::class, null, 2) { it as Double },
+        "sleep_light" to Spec(SleepSessionRecord::class, null, 2) { it as Double },
+        "bp_sys" to Spec(BloodPressureRecord::class, null, 0, { r -> (r as BloodPressureRecord).let { Pair(it.time, it.systolic.inMillimetersOfMercury) } }, "avg") { it as Double },
+        "bp_dia" to Spec(BloodPressureRecord::class, null, 0, { r -> (r as BloodPressureRecord).let { Pair(it.time, it.diastolic.inMillimetersOfMercury) } }, "avg") { it as Double },
+        "glucose" to Spec(BloodGlucoseRecord::class, null, 0, { r -> (r as BloodGlucoseRecord).let { Pair(it.time, it.level.inMilligramsPerDeciliter) } }, "avg") { it as Double },
+        "body_fat" to Spec(BodyFatRecord::class, null, 1, { r -> (r as BodyFatRecord).let { Pair(it.time, it.percentage.value) } }, "last") { it as Double },
+        "spo2" to Spec(OxygenSaturationRecord::class, null, 0, { r -> (r as OxygenSaturationRecord).let { Pair(it.time, it.percentage.value) } }, "avg") { it as Double },
+        "hrv" to Spec(HeartRateVariabilityRmssdRecord::class, null, 0, { r -> (r as HeartRateVariabilityRmssdRecord).let { Pair(it.time, it.heartRateVariabilityMillis) } }, "avg") { it as Double },
+        "period" to Spec(MenstruationFlowRecord::class, null, 0, { r -> (r as MenstruationFlowRecord).let { Pair(it.time, 1.0) } }, "any") { it as Double }
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -239,10 +265,12 @@ class HealthPlugin : Plugin() {
                     }
                 }
                 // Schlaf zählt für den Tag, an dem man aufwacht; Wachphasen werden abgezogen
-                if (ok.contains("sleep")) {
+                val sleepKeys = ok.filter { it.startsWith("sleep") }
+                if (sleepKeys.isNotEmpty()) {
                     val start = first.minusDays(1).atStartOfDay(zone).toInstant()
                     val end = today.plusDays(1).atStartOfDay(zone).toInstant()
                     val mins = HashMap<String, Double>()
+                    val stageMins = HashMap<String, HashMap<String, Double>>()
                     var token: String? = null
                     var pages = 0
                     do {
@@ -259,8 +287,19 @@ class HealthPlugin : Plugin() {
                             if (!out.containsKey(day)) continue
                             var ms = Duration.between(rec.startTime, rec.endTime).toMillis()
                             for (st in rec.stages) {
+                                val sm = Duration.between(st.startTime, st.endTime).toMillis()
                                 if (st.stage == SleepSessionRecord.STAGE_TYPE_AWAKE || st.stage == SleepSessionRecord.STAGE_TYPE_OUT_OF_BED || st.stage == 7) {
-                                    ms -= Duration.between(st.startTime, st.endTime).toMillis()
+                                    ms -= sm
+                                }
+                                val sk = when (st.stage) {
+                                    SleepSessionRecord.STAGE_TYPE_DEEP -> "sleep_deep"
+                                    SleepSessionRecord.STAGE_TYPE_REM -> "sleep_rem"
+                                    SleepSessionRecord.STAGE_TYPE_LIGHT -> "sleep_light"
+                                    else -> null
+                                }
+                                if (sk != null && sm > 0) {
+                                    val m2 = stageMins.getOrPut(sk) { HashMap() }
+                                    m2[day] = (m2[day] ?: 0.0) + sm / 60000.0
                                 }
                             }
                             if (ms > 0) mins[day] = (mins[day] ?: 0.0) + ms / 60000.0
@@ -268,7 +307,52 @@ class HealthPlugin : Plugin() {
                         token = resp.pageToken
                         pages++
                     } while (!token.isNullOrEmpty() && pages < 20)
-                    for ((day, m) in mins) out[day]?.put("sleep", round(m / 60.0, 2))
+                    if (sleepKeys.contains("sleep")) for ((day, m) in mins) out[day]?.put("sleep", round(m / 60.0, 2))
+                    for (sk in sleepKeys) {
+                        val m2 = stageMins[sk] ?: continue
+                        for ((day, m) in m2) out[day]?.put(sk, round(m / 60.0, 2))
+                    }
+                }
+                // Einzelmessungen (Blutdruck, Blutzucker, Körperfett ...): pro Tag Durchschnitt oder letzter Wert
+                for (k in ok) {
+                    val sp = specs.getValue(k)
+                    val pick = sp.pick ?: continue
+                    val sums = HashMap<String, Double>()
+                    val cnts = HashMap<String, Int>()
+                    val lastAt = HashMap<String, Instant>()
+                    val lastVal = HashMap<String, Double>()
+                    var token: String? = null
+                    var pages = 0
+                    do {
+                        @Suppress("UNCHECKED_CAST")
+                        val resp = c.readRecords(
+                            ReadRecordsRequest(
+                                recordType = sp.type as KClass<Record>,
+                                timeRangeFilter = TimeRangeFilter.between(first.atStartOfDay(zone).toInstant(), today.plusDays(1).atStartOfDay(zone).toInstant()),
+                                pageSize = 1000,
+                                pageToken = token
+                            )
+                        )
+                        for (rec in resp.records) {
+                            val pv = pick(rec)
+                            val day = pv.first.atZone(zone).toLocalDate().toString()
+                            if (!out.containsKey(day)) continue
+                            sums[day] = (sums[day] ?: 0.0) + pv.second
+                            cnts[day] = (cnts[day] ?: 0) + 1
+                            val la = lastAt[day]
+                            if (la == null || pv.first.isAfter(la)) { lastAt[day] = pv.first; lastVal[day] = pv.second }
+                        }
+                        token = resp.pageToken
+                        pages++
+                    } while (!token.isNullOrEmpty() && pages < 20)
+                    for ((day, n) in cnts) {
+                        val v = when (sp.mode) {
+                            "last" -> lastVal[day] ?: continue
+                            "any" -> 1.0
+                            else -> (sums[day] ?: 0.0) / n
+                        }
+                        out[day]?.put(k, round(v, sp.digits))
+                    }
                 }
                 val arr = JSArray()
                 for ((day, values) in out) {

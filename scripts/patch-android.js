@@ -30,7 +30,7 @@ public class MainActivity extends BridgeActivity {
 `);
 
 // 2. Manifest: Berechtigungen, Health-Connect-Hinweise, Benachrichtigungs-Dienst
-const HEALTH = ['STEPS', 'DISTANCE', 'ACTIVE_CALORIES_BURNED', 'TOTAL_CALORIES_BURNED', 'EXERCISE', 'FLOORS_CLIMBED', 'HYDRATION', 'NUTRITION', 'HEART_RATE', 'RESTING_HEART_RATE', 'WEIGHT', 'SLEEP'];
+const HEALTH = ['STEPS', 'DISTANCE', 'ACTIVE_CALORIES_BURNED', 'TOTAL_CALORIES_BURNED', 'EXERCISE', 'FLOORS_CLIMBED', 'HYDRATION', 'NUTRITION', 'HEART_RATE', 'RESTING_HEART_RATE', 'WEIGHT', 'SLEEP', 'BLOOD_PRESSURE', 'BLOOD_GLUCOSE', 'BODY_FAT', 'OXYGEN_SATURATION', 'HEART_RATE_VARIABILITY', 'MENSTRUATION'];
 const mfPath = path.join(root, 'src', 'main', 'AndroidManifest.xml');
 let mf = fs.readFileSync(mfPath, 'utf8');
 if (mf.indexOf('treckit-module') < 0) {
