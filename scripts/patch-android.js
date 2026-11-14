@@ -9,7 +9,7 @@ const pkgDir = path.join(root, 'src', 'main', 'java', 'app', 'treckit', 'mobile'
 must(fs.existsSync(pkgDir), 'Paketordner nicht gefunden: ' + pkgDir);
 
 // 1. Module kopieren
-['UsageStatsPlugin.java', 'HealthPlugin.kt', 'NotifPlugin.java', 'TreckitNotifService.java'].forEach(function (f) {
+['UsageStatsPlugin.java', 'HealthPlugin.kt', 'NotifPlugin.java', 'TreckitNotifService.java', 'SharePlugin.java'].forEach(function (f) {
   fs.copyFileSync(path.join(repo, 'plugin', f), path.join(pkgDir, f));
 });
 fs.writeFileSync(path.join(pkgDir, 'MainActivity.java'),
@@ -24,6 +24,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(UsageStatsPlugin.class);
         registerPlugin(HealthPlugin.class);
         registerPlugin(NotifPlugin.class);
+        registerPlugin(SharePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
@@ -48,7 +49,7 @@ if (mf.indexOf('treckit-module') < 0) {
   must(actIdx > 0, 'MainActivity nicht im Manifest');
   const endFilter = mf.indexOf('</intent-filter>', actIdx);
   must(endFilter > 0, 'intent-filter der MainActivity nicht gefunden');
-  mf = mf.slice(0, endFilter) + '</intent-filter>\n            <intent-filter>\n                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />\n            </intent-filter>' + mf.slice(endFilter + '</intent-filter>'.length);
+  mf = mf.slice(0, endFilter) + '</intent-filter>\n            <intent-filter>\n                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />\n            </intent-filter>\n            <intent-filter android:label="In Track.it eintragen">\n                <action android:name="android.intent.action.SEND" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <data android:mimeType="image/*" />\n                <data android:mimeType="text/csv" />\n                <data android:mimeType="text/comma-separated-values" />\n                <data android:mimeType="text/plain" />\n                <data android:mimeType="application/json" />\n            </intent-filter>' + mf.slice(endFilter + '</intent-filter>'.length);
   // Android 14 und neuer: dasselbe über einen Alias, außerdem der Dienst für Benachrichtigungen
   const extra = [
     '<activity-alias',
