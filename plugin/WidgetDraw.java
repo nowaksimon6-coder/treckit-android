@@ -173,7 +173,7 @@ public class WidgetDraw {
         String sc = d.has("score") && !d.isNull("score") ? String.valueOf(d.optInt("score")) : "–";
         cv.drawText(sc, pad, pad + 10 * s + big.getTextSize() + 4 * s, big);
         Paint small = paint(0x80F5F5F7, 10 * s, false);
-        cv.drawText("Ø Score 30 Tage", pad, pad + 10 * s + big.getTextSize() + 18 * s, small);
+        cv.drawText("\u00D8 Score 30 Tage", pad, pad + 10 * s + big.getTextSize() + 18 * s, small);
         // Flamme und Tage rechts oben
         float fs = 22 * s;
         Paint n2 = paint(INK, 18 * s, true);
